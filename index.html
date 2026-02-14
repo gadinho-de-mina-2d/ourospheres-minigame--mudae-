@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>OuroSpheres Mini-Game</title>
+<style>
+body { font-family: Arial; text-align: center; background: #111; color: white; }
+#container { display: flex; justify-content: center; align-items: flex-start; gap: 20px; margin-top: 20px; }
+#grid { display: grid; grid-template-columns: repeat(5, 60px); gap: 8px; }
+button { width: 60px; height: 60px; border: none; background: #444; color: white; font-weight: bold; cursor: pointer; }
+.hidden { display: none; }
+#voltar { margin-top: 15px; padding: 8px 15px; cursor: pointer; }
+#log { background: #222; padding: 10px; max-height: 350px; overflow-y: auto; width: 150px; text-align: left; border: 1px solid #555; font-size: 14px; }
+.log-entry { margin-bottom: 3px; }
+#instrucoes { background: #222; padding: 10px; max-height: 350px; overflow-y: auto; width: 250px; text-align: left; border: 1px solid #555; font-size: 14px; }
+#mensagem { margin-top: 10px; font-size: 14px; }
+input { padding: 6px; width: 200px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<h2>OuroSpheres Mini-Game</h2>
+
+<div id="telaInicial">
+  <p>Digite <b>$oc</b> ou <b>$ourochest</b> para OuroChest</p>
+  <p>Digite <b>$oq</b> ou <b>$ouroquest</b> para OuroQuest</p>
+  <input id="cmd" placeholder="Digite o comando..." />
+  <div id="mensagem">
+    Para você entender como funciona esses mini-jogos na Mudae, e jogar da melhor forma possível.
+  </div>
+</div>
+
+<div id="jogo" class="hidden">
+  <p>Jogadas restantes: <span id="tentativas">5</span></p>
+  <p>Pontos: <span id="pontos">0</span></p>
+  <div id="container">
+    <div id="instrucoes"></div>
+    <div id="grid"></div>
+    <div id="log"></div>
+  </div>
+  <button id="voltar">Voltar ao início</button>
+</div>
+
+<script>
+const telaInicial = document.getElementById("telaInicial");
+const jogoDiv = document.getElementById("jogo");
+const gridEl = document.getElementById("grid");
+const tentativasEl = document.getElementById("tentativas");
+const pontosEl = document.getElementById("pontos");
+const cmdInput = document.getElementById("cmd");
+const btnVoltar = document.getElementById("voltar");
+const logEl = document.getElementById("log");
+const instrucoesEl = document.getElementById("instrucoes");
+
+let grid = Array(25).fill(null);
+let gridVisivel = Array(25).fill(null);
+let tentativas = 5;
+let pontos = 0;
+let jogoAtivo = false;
+let modoAtual = "oc";
+
+let roxasReveladas = 0;
+let clicadasRoxas = [];
+let quartaRoxaTransformada = false;
+
+const pontuacao = {
+  azul: 10, ciano: 20, verde: 35, amarelo: 55, laranja: 90,
+  vermelho: 150, roxa: 5, arcoiris: 500
+};
+
+const coresCSS = {
+  azul: "#1e90ff", ciano: "#00ced1", verde: "#2ecc71",
+  amarelo: "#f1c40f", laranja: "#e67e22", vermelho: "#e74c3c",
+  roxa: "#8e44ad", arcoiris: "linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet)"
+};
+
+function posToRC(pos){ return { r: Math.floor(pos/5), c: pos%5 }; }
+function shuffle(arr){ arr.sort(()=>Math.random()-0.5); }
+
+function gerarMapaOC(){
+  grid.fill(null);
+  let posVermelha;
+  do { posVermelha=Math.floor(Math.random()*25); } while(posVermelha===12);
+  grid[posVermelha]="vermelho";
+
+  const {r,c}=posToRC(posVermelha);
+  const adjHV=[], diagonais=[], linhaColuna=[];
+  for(let i=0;i<25;i++){
+    if(i===posVermelha) continue;
+    const p=posToRC(i);
+    const dr=p.r-r, dc=p.c-c, absR=Math.abs(dr), absC=Math.abs(dc);
+    if((absR===1 && absC===0)||(absR===0 && absC===1)) adjHV.push(i);
+    if(absR===absC) diagonais.push(i);
+    if(p.r===r||p.c===c) linhaColuna.push(i);
+  }
+  shuffle(adjHV); adjHV.slice(0,2).forEach(i=>grid[i]="laranja");
+  shuffle(diagonais); diagonais.forEach(i=>{ if(grid[i]===null && grid.filter(c=>c==="amarelo").length<3) grid[i]="amarelo"; });
+  shuffle(linhaColuna); linhaColuna.forEach(i=>{ if(grid[i]===null && grid.filter(c=>c==="verde").length<4) grid[i]="verde"; });
+  const direcoes=[...new Set([...diagonais,...linhaColuna])];
+  direcoes.forEach(i=>{ if(grid[i]===null) grid[i]="ciano"; });
+  for(let i=0;i<25;i++){ if(grid[i]===null) grid[i]="azul"; }
+}
+
+function gerarMapaOQ(){
+  grid.fill("azul");
+  const posicoes=Array.from({length:25},(_,i)=>i);
+  shuffle(posicoes);
+  const roxas=posicoes.slice(0,4);
+  roxas.forEach(i=>grid[i]="roxa");
+  gridVisivel.fill(null);
+  clicadasRoxas = [];
+  roxasReveladas = 0;
+  quartaRoxaTransformada = false;
+
+  for(let i=0;i<25;i++){
+    if(roxas.includes(i)) continue;
+    const adj=roxas.filter(r=>Math.abs(Math.floor(r/5)-Math.floor(i/5))<=1 && Math.abs(r%5-i%5)<=1).length;
+    if(adj===1) grid[i]="ciano";
+    else if(adj===2) grid[i]="verde";
+    else if(adj===3) grid[i]="amarelo";
+    else if(adj>=4) grid[i]="laranja";
+    else grid[i]="azul";
+  }
+}
+
+function iniciarJogo(modo){
+  modoAtual = modo;
+  grid.fill(null);
+  gridVisivel.fill(null);
+  roxasReveladas = 0;
+  clicadasRoxas = [];
+  quartaRoxaTransformada = false;
+  logEl.innerHTML = "";
+
+  if(modo==="oc"){
+    gerarMapaOC();
+    tentativas=5;
+    instrucoesEl.innerHTML = `
+      <b>OuroChest ($oc)</b><br><br>
+      Tente encontrar a cor <span style="color:#e74c3c">vermelha</span>. (pontuação mínima: 50 / máxima: 440)<br><br>
+      ● 1 <span style="color:#e74c3c">Vermelho</span> = 150 pts, nunca no centro<br>
+      ● 2 <span style="color:#e67e22">Laranjas</span> = 90 pts cada, adjacentes HV da vermelha ⬅️➡️⬆️⬇️<br>
+      ● 3 <span style="color:#f1c40f">Amarelas</span> = 55 pts cada, na diagonal ↙️↘️↖️↗️<br>
+      ● 4 <span style="color:#2ecc71">Verdes</span> = 35 pts cada, horizontal/vertical<br>
+      ● até 5 <span style="color:#00ced1">Cianos</span> = 20 pts cada, HV e diagonais<br>
+      ● <span style="color:#1e90ff">Azul</span> = 10 pts, fora da linha e diagonal da vermelha<br><br>
+      Boa sorte!
+    `;
+  }
+
+  if(modo==="oq"){
+    gerarMapaOQ();
+    tentativas=7;
+    instrucoesEl.innerHTML = `
+      <b>OuroQuest ($oq)</b><br><br>
+      Tente encontrar 3 cores <span style="color:#8e44ad">roxas</span> = 5 pts cada uma... (Encontre 3 entre 4; elas são FREE, não consomem tentativas), e assim revelar a 4ª como <span style="color:#e74c3c">vermelha</span> = 150 pts. <br>
+ou 
+      <span>
+        <span style="color:red">A</span><span style="color:orange">r</span><span style="color:yellow">c</span><span style="color:green">o</span>
+        <span style="color:blue">í</span><span style="color:indigo">r</span><span style="color:violet">i</span><span style="color:red">s</span>
+      </span>= 500 pts. (pontuação mínima: 70 / máxima: 805)<br><br>
+      ● <span style="color:#e67e22">Laranja</span> = 90 pts cada, há 4 roxas ao redor<br>
+      ● <span style="color:#f1c40f">Amarela</span> = 55 pts cada, há 3 roxas ao redor<br>
+      ● <span style="color:#2ecc71">Verde</span> = 35 pts cada, há 2 roxas ao redor<br>
+      ● <span style="color:#00ced1">Ciano</span> = 20 pts cada, há 1 roxa ao redor<br>
+      ● <span style="color:#1e90ff">Azul</span> = 10 pts cada, não há nenhuma roxa ao redor<br><br>
+      Boa sorte!
+    `;
+  }
+
+  pontos = 0;
+  jogoAtivo = true;
+  telaInicial.classList.add("hidden");
+  jogoDiv.classList.remove("hidden");
+  tentativasEl.textContent = tentativas;
+  pontosEl.textContent = pontos;
+
+  gridEl.innerHTML="";
+  for(let i=0;i<25;i++){
+    const btn = document.createElement("button");
+    btn.dataset.index = i;
+    btn.onclick = ()=>clicarBotao(btn, i);
+    gridEl.appendChild(btn);
+  }
+}
+
+function clicarBotao(btn, idx){
+  if(!jogoAtivo || btn.disabled) return;
+  let cor = grid[idx];
+
+  if(modoAtual==="oq"){
+    if(cor==="roxa"){
+      roxasReveladas++;
+      clicadasRoxas.push(idx);
+
+      if(roxasReveladas===3 && !quartaRoxaTransformada){
+        const quarta = grid.map((c,i)=>i).filter(i=>grid[i]==="roxa" && !clicadasRoxas.includes(i));
+        if(quarta.length>0){
+          const pos = quarta[0];
+          const btn4 = gridEl.children[pos];
+          const rnd = Math.random()<1/11 ? "arcoiris" : "vermelho";
+          grid[pos] = rnd;
+          quartaRoxaTransformada = true;
+          btn4.style.background = coresCSS[rnd];
+          btn4.textContent = "";
+        }
+      }
+    } 
+    if(cor!=="roxa") tentativas--;
+  } else { tentativas--; }
+
+  gridVisivel[idx] = cor;
+  btn.style.background = coresCSS[cor];
+  btn.textContent = pontuacao[cor];
+  btn.disabled = true;
+
+  pontos += pontuacao[cor];
+  pontosEl.textContent = pontos;
+  tentativasEl.textContent = tentativas;
+
+  const {r,c}=posToRC(idx);
+  const entry = document.createElement("div");
+  entry.className="log-entry";
+  entry.textContent = `(${r+1},${c+1}) → ${cor}`;
+  logEl.prepend(entry);
+
+  if(tentativas===0){
+    jogoAtivo=false;
+    revelarMapa();
+    setTimeout(()=>alert("Fim da partida! Pontos: "+pontos),200);
+  }
+}
+
+function revelarMapa(){
+  const botoes = gridEl.children;
+  for(let i=0;i<25;i++){
+    const cor = grid[i];
+    botoes[i].style.background = coresCSS[cor];
+    botoes[i].textContent = gridVisivel[i] ? pontuacao[cor] : "";
+  }
+}
+
+function voltarInicio(){
+  jogoDiv.classList.add("hidden");
+  telaInicial.classList.remove("hidden");
+  cmdInput.value="";
+}
+
+cmdInput.addEventListener("keydown", e=>{
+  if(e.key==="Enter"){
+    const cmd = cmdInput.value.toLowerCase().trim();
+    if(cmd==="$oc" || cmd==="$ourochest") iniciarJogo("oc");
+    if(cmd==="$oq" || cmd==="$ouroquest") iniciarJogo("oq");
+  }
+});
+
+btnVoltar.onclick = voltarInicio;
+</script>
+</body>
+</html>
